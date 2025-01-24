@@ -151,6 +151,34 @@ def summarize(metadata_split, args, partition_index, process_index):
                 f"{score_type}.mean.pval"
             )
             result_scores = result_scores.with_columns(score_mean_pval)
+            
+        if args.peaks:
+            if args.schema != 'chrombpnet':
+                raise NotImplementedError(f"Schema {args.schema} not implemented for peak intersection.")
+            variant_scores_bed_format = result_scores.select(["chr", "pos", "allele1", "allele2", "variant_id"])
+            variant_scores_bed_format = variant_scores_bed_format.with_columns([
+                (pl.col("pos") - 1).alias("pos"),
+                (pl.col("pos") + pl.col("allele1").str.len_chars()).alias("end")
+            ])
+            variant_scores_bed_format = variant_scores_bed_format.select(["chr", "pos", "end", "allele1", "allele2", "variant_id"])
+            variant_scores_bed_format = variant_scores_bed_format.sort(["chr", "pos", "end"])
+            peak_df = pl.read_csv(args.peaks, has_header=False, separator='\t', null_values=['.'])
+            variant_bed = pybedtools.BedTool.from_dataframe(variant_scores_bed_format.to_pandas())
+            peak_bed = pybedtools.BedTool.from_dataframe(
+                    peak_df.to_pandas()
+                    )
+            peak_intersect_bed = variant_bed.intersect(peak_bed, wa=True, u=True)
+
+            peak_intersect_df = pl.from_pandas(
+                peak_intersect_bed.to_dataframe(names=variant_scores_bed_format.to_pandas().columns.tolist())
+            )
+            if peak_intersect_df.is_empty():
+                peak_intersect_df = pl.DataFrame({col: [] for col in variant_scores_bed_format.columns})
+                
+            result_scores = result_scores.with_columns(
+                result_scores["variant_id"].is_in(peak_intersect_df["variant_id"]).alias("in_peak")
+            )
+
         processing_time += time.time() - processing_time_start
         
         result_scores.write_csv(summarize_output_path, separator="\t")

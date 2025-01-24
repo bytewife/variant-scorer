@@ -116,3 +116,17 @@ python variant_annotation.py -sd [VARIANT_SCORE_DIR] -o [out_prefix] -p [PEAKS] 
 ---
 
 **Note:** pos (position) column is for 1-indexed SNP position, unless the schema is *bed*
+
+## Pushing to DockerHub
+
+### 1. Build the Docker image
+
+```bash
+docker build -t kundajelab/variant-scorer:rewrite .
+```
+
+### 2. Push the Docker image
+
+```bash
+docker push kundajelab/variant-scorer:rewrite
+```
